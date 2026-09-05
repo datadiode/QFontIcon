@@ -4,7 +4,8 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
-#include <QFontIcon>
+#include <awesome.h>
+#include <qfonticon.h>
 
 int main(int argc, char *argv[])
 {
@@ -44,13 +45,15 @@ int main(int argc, char *argv[])
     //=====================
     {
         QPushButton* beerButton = new QPushButton( "Cheers!");
+        beerButton->setFixedHeight(75);
 
-        auto engine = new QFontIconEngine(fa::beer);
+        auto engine = new QFontIconEngine(fa::v5::beer);
         engine->setSpeed(180);
         engine->setWidget(beerButton);
         engine->setCurve(QEasingCurve::InOutCubic);
 
         beerButton->setIcon( QIcon(engine) );
+        beerButton->setIconSize(QSize(50, 50));
 
         layout->addWidget(beerButton);
     }
@@ -60,15 +63,17 @@ int main(int argc, char *argv[])
     {
         QPushButton* toggleButton = new QPushButton("Toggle Me");
         toggleButton->setCheckable(true);
+        toggleButton->setFixedHeight(75);
 
         auto engine = new QFontIconEngine();
-        engine->setIcon(fa::toggle_on, QIcon::Normal, QIcon::On);
+        engine->setIcon(fa::v6::toggle_on, QIcon::Normal, QIcon::On);
         engine->setColor(Qt::green, QIcon::Normal, QIcon::On);
 
-        engine->setIcon(fa::toggle_off, QIcon::Normal, QIcon::Off);
+        engine->setIcon(fa::v6::toggle_off, QIcon::Normal, QIcon::Off);
         engine->setColor(Qt::red, QIcon::Normal, QIcon::Off);
 
         toggleButton->setIcon( QIcon(engine) );
+        toggleButton->setIconSize(QSize(50, 50));
 
         layout->addWidget(toggleButton);
     }

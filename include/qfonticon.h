@@ -12,7 +12,7 @@
 #endif
 
 class QFontIconEnginePrivate;
-class QFontIconEngine : public QIconEngine
+class QFONTICON_EXPORT QFontIconEngine : public QIconEngine
 {
 public:
     enum { InvalidIcon = -1 };
@@ -72,12 +72,8 @@ public:
     static QIcon icon(const QString& icon, const QString& font = {});
     static void setDefaultFont(int font);
     static int defaultFont();
-
-    static bool registerIconName(QString name, int code);
-    static bool registerIconName(const QMap<QString, int>& names);
-
-    static bool registerFontName(QString name, int font);
-    static bool registerFontName(const QMap<QString, int>& names);
+    static void registerIconName(const QString& name, int code);
+    static void registerFontName(const QString& name, int font);
 
 protected:
     QScopedPointer<QFontIconEnginePrivate> d;

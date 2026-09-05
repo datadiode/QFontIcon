@@ -694,18 +694,13 @@ void QFontIconEngine::paint(QPainter* painter, const QRect& rect, QIcon::Mode mo
 
 QPixmap QFontIconEngine::pixmap(const QSize& size, QIcon::Mode mode, QIcon::State state)
 {
-    if(size.isValid() && !size.isEmpty())
+    QPixmap pm(size);
+    pm.fill(Qt::transparent);
     {
-        QPixmap pm(size);
-        pm.fill( Qt::transparent ); // we need transparency
-        {
-            QPainter p(&pm);
-            paint(&p, QRect(QPoint(0,0),size), mode, state);
-        }
-        return pm;
+        QPainter p(&pm);
+        paint(&p, QRect(QPoint(0, 0), size), mode, state);
     }
-    else
-        return {};
+    return pm;
 }
 
 void QFontIconEngine::virtual_hook(int id, void* data)
@@ -772,53 +767,15 @@ int QFontIconEngine::defaultFont()
 /**
  * @brief Register a name for the given code point
  */
-bool QFontIconEngine::registerIconName(QString name, int code)
+void QFontIconEngine::registerIconName(const QString& name, int code)
 {
-    name = name.trimmed();
-    if(name.isEmpty())
-    {
-        qWarning() << "QFontIcon: Invalid icon name";
-        return false;
-    }
-
     QFontIconEnginePrivate::iconNames[name] = code;
-    return true;
-}
-
-/**
- * @brief Register all the names / code points provided
- */
-bool QFontIconEngine::registerIconName(const QMap<QString, int>& names)
-{
-    bool r = true;
-    for(auto it = names.begin(); it != names.end(); ++it)
-        r &= registerIconName(it.key(), it.value());
-    return r;
 }
 
 /**
  * @brief Register a font name for the given font id
  */
-bool QFontIconEngine::registerFontName(QString name, int font)
+void QFontIconEngine::registerFontName(const QString& name, int font)
 {
-    name = name.trimmed();
-    if(name.isEmpty())
-    {
-        qWarning() << "QFontIcon: Invalid font name";
-        return false;
-    }
-
     QFontIconEnginePrivate::fontNames[name] = font;
-    return true;
-}
-
-/**
- * @brief Register all the names / font ids provided
- */
-bool QFontIconEngine::registerFontName(const QMap<QString, int>& names)
-{
-    bool r = true;
-    for(auto it = names.begin(); it != names.end(); ++it)
-        r &= registerFontName(it.key(), it.value());
-    return r;
 }
