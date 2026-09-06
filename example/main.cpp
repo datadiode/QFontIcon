@@ -35,7 +35,7 @@ int main(int argc, char *argv[])
     QObject::connect(&app, &QApplication::paletteChanged, updatePalette);
     // === end of the trick
 
-    QFontIconEngine::loadFont(":/fonts/fa-solid-900.ttf");
+    QFontIconEngine::loadFont(":/fonts/fa-solid-900.ttf#fa-solid", QMetaEnum::fromType<fa::v5::codepoints>());
 
     QMainWindow w;
 
@@ -44,10 +44,10 @@ int main(int argc, char *argv[])
     // a simple animated beer button
     //=====================
     {
-        QPushButton* beerButton = new QPushButton( "Cheers!");
+        QPushButton* beerButton = new QPushButton("Cheers!");
         beerButton->setFixedHeight(75);
 
-        auto engine = new QFontIconEngine(fa::v5::beer);
+        auto engine = new QFontIconEngine("beer", "fa-solid");
         engine->setSpeed(180);
         engine->setWidget(beerButton);
         engine->setCurve(QEasingCurve::InOutCubic);
@@ -66,9 +66,11 @@ int main(int argc, char *argv[])
         toggleButton->setFixedHeight(75);
 
         auto engine = new QFontIconEngine();
+        engine->setFont("fa-solid", QIcon::Normal, QIcon::Off);
         engine->setIcon(fa::v6::toggle_on, QIcon::Normal, QIcon::On);
         engine->setColor(Qt::green, QIcon::Normal, QIcon::On);
 
+        //engine->setFont("fa-solid", QIcon::Normal, QIcon::Off);
         engine->setIcon(fa::v6::toggle_off, QIcon::Normal, QIcon::Off);
         engine->setColor(Qt::red, QIcon::Normal, QIcon::Off);
 

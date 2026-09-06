@@ -2,6 +2,7 @@
 #define QFONTICON_H
 
 #include <QIconEngine>
+#include <QMetaEnum>
 #include <QVariant>
 #include <QEasingCurve>
 
@@ -15,28 +16,25 @@ class QFontIconEnginePrivate;
 class QFONTICON_EXPORT QFontIconEngine : public QIconEngine
 {
 public:
-    enum { InvalidIcon = -1 };
+    enum { InvalidIcon = 0xffff };
 
 public:
     QFontIconEngine();
     QFontIconEngine(const QFontIconEngine& other);
 
-    QFontIconEngine(int icon, int font = defaultFont());
-    QFontIconEngine(const QString& icon, const QString& font = {});
+    QFontIconEngine(int icon, const QString& font = QString());
+    QFontIconEngine(const QString& icon, const QString& font = QString());
 
     ~QFontIconEngine() override;
 
     // ======
-
-    bool isValid() const;
 
     int icon(QIcon::Mode mode = QIcon::Normal, QIcon::State state = QIcon::Off) const;
     QString iconName() QFI6_CONST override;
     QString iconName(QIcon::Mode mode, QIcon::State state) const;
     QString text(QIcon::Mode mode = QIcon::Normal, QIcon::State state = QIcon::Off) const;
     quint32 glyphIndex(QIcon::Mode mode = QIcon::Normal, QIcon::State state = QIcon::Off) const;
-    int font(QIcon::Mode mode = QIcon::Normal, QIcon::State state = QIcon::Off) const;
-    QString fontName(QIcon::Mode mode = QIcon::Normal, QIcon::State state = QIcon::Off) const;
+    QString font(QIcon::Mode mode = QIcon::Normal, QIcon::State state = QIcon::Off) const;
     qreal scaleFactor(QIcon::Mode mode = QIcon::Normal, QIcon::State state = QIcon::Off) const;
     QColor color(QIcon::Mode mode = QIcon::Normal, QIcon::State state = QIcon::Off) const;
     qreal speed(QIcon::Mode mode = QIcon::Normal, QIcon::State state = QIcon::Off) const;
@@ -46,8 +44,7 @@ public:
 
     void setIcon(int icon, QIcon::Mode mode = QIcon::Normal, QIcon::State state = QIcon::Off);
     void setIcon(const QString& name, QIcon::Mode mode = QIcon::Normal, QIcon::State state = QIcon::Off);
-    void setFont(int font, QIcon::Mode mode = QIcon::Normal, QIcon::State state = QIcon::Off);
-    void setFont(const QString& name, QIcon::Mode mode = QIcon::Normal, QIcon::State state = QIcon::Off);
+    void setFont(const QString& font, QIcon::Mode mode = QIcon::Normal, QIcon::State state = QIcon::Off);
     void setScaleFactor(qreal scale, QIcon::Mode mode = QIcon::Normal, QIcon::State state = QIcon::Off);
     void setColor(const QColor& color, QIcon::Mode mode = QIcon::Normal, QIcon::State state = QIcon::Off);
     void setSpeed(qreal speed, QIcon::Mode mode = QIcon::Normal, QIcon::State state = QIcon::Off);
@@ -59,21 +56,13 @@ public:
 
     QFontIconEngine* clone() const override;
 
-    QSize actualSize(const QSize &size, QIcon::Mode mode, QIcon::State state) override;
-
     void paint(QPainter* painter, const QRect& rect, QIcon::Mode mode, QIcon::State state) override;
     QPixmap pixmap(const QSize& size, QIcon::Mode mode, QIcon::State state) override;
 
-    void virtual_hook(int id, void* data) override;
-
 public:
-    static bool loadFont(const QString& filename, int font = defaultFont(), const QString& name = {});
-    static QIcon icon(int icon, int font = defaultFont());
-    static QIcon icon(const QString& icon, const QString& font = {});
-    static void setDefaultFont(int font);
-    static int defaultFont();
-    static void registerIconName(const QString& name, int code);
-    static void registerFontName(const QString& name, int font);
+    static bool loadFont(const QString& filename, QMetaEnum codepoints = QMetaEnum());
+    static QIcon icon(int icon, const QString& font = QString());
+    static QIcon icon(const QString& icon, const QString& font = QString());
 
 protected:
     QScopedPointer<QFontIconEnginePrivate> d;

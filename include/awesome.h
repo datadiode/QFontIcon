@@ -1,6 +1,8 @@
 #ifndef AWESOME_H
 #define AWESOME_H
 
+#include <QObject>
+
 /**
  * This file has been automatically generated.
  */
@@ -9,9 +11,9 @@ namespace fa {
 
 enum fonts { solid, regular, light, duotone, brands };
 
-namespace v5 {
-
-enum icons {
+class v5 : public QObject {
+    Q_OBJECT;
+public: enum codepoints {
     _500px                              = 0xf26e,
     abacus                              = 0xf640,
     accessible_icon                     = 0xf368,
@@ -2323,13 +2325,12 @@ enum icons {
     youtube_square                      = 0xf431,
     zhihu                               = 0xf63f,
 };
-  
-bool register_awesome_names();
-}
+Q_ENUM(codepoints)
+};
 
-namespace v6 {
-
-enum icons {
+class v6 : public QObject {
+    Q_OBJECT;
+public: enum codepoints {
     _0                                     = 0x30,
     _1                                     = 0x31,
     _2                                     = 0x32,
@@ -4177,10 +4178,8 @@ enum icons {
     z                                      = 0x5a,
     zhihu                                  = 0xf63f,
 };
-
-bool register_awesome_names();
-
-}
+Q_ENUM(codepoints)
+};
 
 }
 
