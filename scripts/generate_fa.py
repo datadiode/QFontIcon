@@ -129,6 +129,8 @@ cpp_keywords = [
     'linux'
 ]
 
+fa_tag = "https://github.com/components/font-awesome/raw/refs/tags/6.5.2"
+
 def main():
 
     json_file = {}
@@ -137,8 +139,13 @@ def main():
         with open(sys.argv[1], 'r') as data:
             json_file = json.load(data)
     else:
+        # === Download fonts
+        open("fa-solid-900.ttf", "wb").write(requests.get(fa_tag + "/webfonts/fa-solid-900.ttf").content)
+        open("fa-regular-400.ttf", "wb").write(requests.get(fa_tag + "/webfonts/fa-regular-400.ttf").content)
+        open("fa-brands-400.ttf", "wb").write(requests.get(fa_tag + "/webfonts/fa-brands-400.ttf").content)
+
         # === Extract icons data directly from the source
-        json_file = requests.get("https://raw.githubusercontent.com/FortAwesome/Font-Awesome/6.x/metadata/icons.json").json()
+        json_file = requests.get(fa_tag + "/metadata/icons.json").json()
 
     icons = []
     max_len = 0
@@ -160,68 +167,44 @@ def main():
         # save
         icons.append((key, name, code))
 
-    icons.sort(key=lambda e: e[0])
+    icons.sort(key=lambda e: e[1])
 
     with open('awesome.h', 'w') as file:
         file.write(('#ifndef AWESOME_H\n'
-                    '#define AWESOME_H\n\n'
-
+                    '#define AWESOME_H\n'
+                    '\n'
+                    '#include <QObject>\n'
+                    '\n'
                     '/**\n'
                     ' * This file has been automatically generated.\n'
-                    ' */\n\n'
-
-                    'namespace fa {\n\n'
-
-                    'enum fonts { solid, regular, light, duotone, brands };\n\n'
-
-                    'enum icons {\n'))
+                    ' */\n'
+                    '\n'
+                    'namespace fa {\n'
+                    '\n'
+                    'static constexpr QLatin1String tag("' + fa_tag + '");\n'
+                    '\n'
+                    'static constexpr QLatin1String solid("solid");\n'
+                    'static constexpr QLatin1String regular("regular");\n'
+                    'static constexpr QLatin1String light("light");\n'
+                    'static constexpr QLatin1String duotone("duotone");\n'
+                    'static constexpr QLatin1String brands("brands");\n'
+                    '\n'
+                    'class v6 : public QObject {\n'
+                    '    v6() = delete;\n'
+                    '    Q_OBJECT;\n'
+                    'public: enum codepoints {\n'))
 
         for key, name, code in icons:
             line = '    {name:<{len}} = {code},\n'.format(name=name, code=code, len=max_len)
             file.write(line)
 
-        file.write(('};\n\n'
-
-                    'bool register_awesome_names();\n'
-                    '}\n\n'
-
-                    '#endif // AWESOME_H\n'))
-
-    with open('awesome.cpp', 'w') as file:
-        file.write(('#include <awesome.h>\n'
-                    '#include <qfonticon.h>\n\n'
-
-                    '/**\n'
-                    ' * This file has been automatically generated.\n'
-                    ' */\n\n'
-
-                    'namespace fa {\n\n'
-
-                    'bool register_awesome_names()\n'
-                    '{\n'
-                    '    bool r = true;\n\n'
-
-                    '    r &= QFontIconEngine::registerFontName({\n'
-                    '        { QStringLiteral("solid"),   solid   },\n'
-                    '        { QStringLiteral("regular"), regular },\n'
-                    '        { QStringLiteral("light"),   light   },\n'
-                    '        { QStringLiteral("duotone"), duotone },\n'
-                    '        { QStringLiteral("brands"),  brands  }\n'
-                    '    });\n\n'
-
-                    '    r &= QFontIconEngine::registerIconName({\n'))
-
-        for key, name, code in icons:
-            string = 'QStringLiteral("{}")'.format(key)
-            pair   = '{string:<{len1}}, {name:<{len2}}'.format(string=string, name=name, len1=max_len+18, len2=max_len)
-            line   = '        { ' + pair + ' },\n'
-            file.write(line)
-
-        file.write(('    });\n\n'
-
-                    '    return r;'
+        file.write(('};\n'
+                    'Q_ENUM(codepoints)\n'
+                    '};\n'
+                    '\n'
                     '}\n'
-                    '}\n'))
+                    '\n'
+                    '#endif // AWESOME_H\n'))
         
 if __name__ == '__main__':
     main()

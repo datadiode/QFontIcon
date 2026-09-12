@@ -1,22 +1,17 @@
 #include <qfonticon.h>
 
+#include <QApplication>
+#include <QAtomicInteger>
 #include <QMap>
-#include <QRawFont>
-#include <QIconEngine>
-#include <QTimer>
-#include <QFontMetrics>
-#include <QPainter>
-#include <QDebug>
-#include <QGuiApplication>
-#include <QPalette>
-#include <QWidget>
-#include <QFontDatabase>
-#include <QPainterPath>
-#include <QFile>
-#include <QUrl>
 #include <QMetaEnum>
+#include <QPainterPath>
+#include <QPainter>
+#include <QRawFont>
+#include <QStyle>
+#include <QTimer>
+#include <QWidget>
 
-template<class T>
+template<typename T>
 class StateMap : public QMap<QPair<QIcon::Mode, QIcon::State>, T>
 {
 public:
@@ -26,9 +21,9 @@ public:
     using QMap<Key, T>::QMap;
     using QMap<Key, T>::operator=;
 
-    T get(Key k, const T& defaultValue = {}) const
+    T get(Key k, const T& defaultValue = T()) const
     {
-        auto it = this->end();
+        typename StateMap::const_iterator it;
         while ((it = this->find(k)) == this->end())
         {
             if (k.first != QIcon::Normal)
@@ -41,7 +36,7 @@ public:
         return it.value();
     }
 
-    T get(QIcon::Mode mode = QIcon::Normal, QIcon::State state = QIcon::Off, const T& defaultValue = {}) const
+    T get(QIcon::Mode mode = QIcon::Normal, QIcon::State state = QIcon::Off, const T& defaultValue = T()) const
     {
         return get(Key{mode, state}, defaultValue);
     }
@@ -63,11 +58,9 @@ public:
 class QFontIconEnginePrivate
 {
 public:
-    QFontIconEnginePrivate();
     ~QFontIconEnginePrivate();
 
     void setupTimer();
-    QSizeF resizeFont(const QSizeF& size, QRawFont& font, qreal scale, quint32 glyphIndex) const;
 
     StateMap<int> icons;
     StateMap<QString> fonts;
@@ -80,82 +73,67 @@ public:
 
     bool badge = false;
 
-    QScopedPointer<QTimer> timer;
+    static QTimer timer;
+    static QAtomicInt timerRefCount;
+    QMetaObject::Connection timerConnection;
     StateMap<qreal> progress;
     StateMap<qreal> angles;
 
     static QMap<QString, QPair<QRawFont, QMetaEnum>> availableFonts;
     static QRawFont getFont(const QString& font);
     static QMetaEnum getEnum(const QString& font);
+    static void resizeFont(const QSizeF& size, QRawFont& font, qreal scale, quint32 glyphIndex);
+    static int keyToValue(const QMetaEnum& metaEnum, const char* key, bool* ok = nullptr);
 };
 
-QFontIconEnginePrivate::QFontIconEnginePrivate() {}
-QFontIconEnginePrivate::~QFontIconEnginePrivate() {}
+QTimer QFontIconEnginePrivate::timer;
+QAtomicInt QFontIconEnginePrivate::timerRefCount;
+
+QFontIconEnginePrivate::~QFontIconEnginePrivate()
+{
+    if (QObject::disconnect(timerConnection) && --timerRefCount == 0)
+        timer.stop();
+}
 
 void QFontIconEnginePrivate::setupTimer()
 {
-    timer.reset();
+    if (QObject::disconnect(timerConnection) && --timerRefCount == 0)
+        timer.stop();
 
-    if(!widget)
+    if (!widget)
         return;
 
-    if(std::none_of(speeds.begin(), speeds.end(),
-                    [](qreal s){ return s > 0;}))
+    if (std::none_of(speeds.begin(), speeds.end(), [](qreal s){ return s > 0; }))
         return;
 
-    timer.reset(new QTimer);
-    timer->setInterval(20);
+    if (timerRefCount++ == 0)
+        timer.start(20);
 
-    QObject::connect(timer.data(), &QTimer::timeout, [this]()
+    timerConnection = QObject::connect(&timer, &QTimer::timeout, [this]()
     {
         StateMap<qreal> new_progress;
         StateMap<qreal> new_angles;
 
-        for(auto it = speeds.begin(); it != speeds.end(); ++it)
+        for (auto it = speeds.begin(); it != speeds.end(); ++it)
         {
-            if(it.value() == 0)
+            if (it.value() == 0)
                 continue;
 
             // Speed is in degrees per seconds
             qreal p = progress.get(it.key(), 0);
-            p += (it.value()/1000.0*timer->interval())/360.0;
-
-            if(p >= 1)
-                p -= 1;
-
+            p = fmod(p + it.value() / 1000.0 * timer.interval() / 360.0, 1.0);
             new_progress.set(p, it.key());
 
             auto c = curves.get(it.key());
             qreal a = c.valueForProgress(p) * 360.0;
             new_angles.set(a, it.key());
+
             widget->update();
         }
 
         angles.swap(new_angles);
         progress.swap(new_progress);
     });
-
-    timer->start();
-}
-
-QSizeF QFontIconEnginePrivate::resizeFont(const QSizeF& size, QRawFont& font, qreal scale, quint32 glyphIndex) const
-{
-    qreal drawSize = qMax(size.width(), size.height())*scale;
-    font.setPixelSize(drawSize);
-
-    auto rect = font.boundingRect(glyphIndex);
-
-    auto rsize = rect.size();
-
-    if(rsize.width() > size.width() || rsize.height() > size.height())
-    {
-        auto nsize = rsize.scaled(size, Qt::KeepAspectRatio);
-        qreal ratio = nsize.height() / rsize.height();
-        font.setPixelSize(drawSize * ratio);
-        return nsize;
-    }
-    else
-        return size;
 }
 
 QMap<QString, QPair<QRawFont, QMetaEnum>> QFontIconEnginePrivate::availableFonts;
@@ -174,6 +152,39 @@ QMetaEnum QFontIconEnginePrivate::getEnum(const QString& font)
     if (auto it = availableFonts.find(font); it != availableFonts.end())
         me = it.value().second;
     return me;
+}
+
+void QFontIconEnginePrivate::resizeFont(const QSizeF& size, QRawFont& font, qreal scale, quint32 glyphIndex)
+{
+    qreal drawSize = size.width();
+    font.setPixelSize(drawSize);
+    // Adjust scale to fit the widest glyph in the font to avoid varying sizes for different glyphs
+    const qreal maxCharWidth = font.maxCharWidth();
+    if (maxCharWidth > drawSize)
+        drawSize = drawSize * drawSize / maxCharWidth;
+    font.setPixelSize(drawSize * scale);
+}
+
+/*
+ * Like QMetaEnum::keyToValue() but uses binary rather than linear search.
+ * Key-value pairs must be sorted by key, like produced by generate_fa.py.
+ */
+int QFontIconEnginePrivate::keyToValue(const QMetaEnum& metaEnum, const char* key, bool* ok)
+{
+    int lower = 0;
+    int upper = metaEnum.keyCount();
+    while (lower < upper)
+    {
+        int const match = (upper + lower) >> 1;
+        int const cmp = strcmp(metaEnum.key(match), key);
+        if (cmp >= 0)
+            upper = match;
+        if (cmp <= 0)
+            lower = match + 1;
+    }
+    if (bool okay = (ok ? *ok : okay) = lower > upper) // it's cool man
+        return metaEnum.value(upper);
+    return -1;
 }
 
 // =============================================================================
@@ -195,12 +206,17 @@ QMetaEnum QFontIconEnginePrivate::getEnum(const QString& font)
  * @code
  * QIcon icon = QFontIconEngine::icon(0xf82b) // This is the code point of the glyph
  *
- * // Alternatively, you can make an enumeration and / or register string base names
- * enum glyph_code {
+ * // Alternatively, you can make an enumeration and optionally register it with Qt
+ * class my_font : public QObject {
+ *     v5() = delete;
+ *     Q_OBJECT;
+ * public: enum codepoints {
  *     super_glyph = 0xf82b
  * };
+ * Q_ENUM(codepoints)
+ * };
  *
- * QFontIconEngine::registerIconName("super-glyph", super_glyph);
+ * QFontIconEngine::loadFont(":/path/to/my_font.ttf", QMetaEnum::fromType<my_font::codepoints>());
  *
  * // And then use names instead:
  * QIcon otherIcon = QFontIconEngine::icon("super-glyph");
@@ -269,25 +285,15 @@ QMetaEnum QFontIconEnginePrivate::getEnum(const QString& font)
 QFontIconEngine::QFontIconEngine() :
     d(new QFontIconEnginePrivate)
 {
-    setFont(QString());
 }
 
 /**
  * @brief Copy constructor.
  */
 QFontIconEngine::QFontIconEngine(const QFontIconEngine& other) :
-    d(new QFontIconEnginePrivate)
+    d(new QFontIconEnginePrivate(*other.d))
 {
-    auto& od = other.d;
-
-    d->icons = od->icons;
-    d->fonts = od->fonts;
-    d->colors = od->colors;
-    d->speeds = od->speeds;
-    d->curves = od->curves;
-
-    d->widget = od->widget;
-
+    d->timerConnection = QMetaObject::Connection();
     d->setupTimer();
 }
 
@@ -320,7 +326,105 @@ QFontIconEngine::QFontIconEngine(const QString& icon, const QString& font) : QFo
     setIcon(icon);
 }
 
-QFontIconEngine::~QFontIconEngine() {}
+QFontIconEngine::QFontIconEngine(const QUrl& url) : QFontIconEngine()
+{
+    const QUrlQuery query(url);
+
+    if (query.isEmpty())
+    {
+        const QString path = url.path();
+        const QString fragment = url.fragment();
+        QFontIconEnginePrivate::availableFonts[fragment].first.loadFromFile(path, 32, QFont::PreferDefaultHinting);
+        // set font name so destructor can register a QMetaEnum should one have been assigned in between
+        setFont(fragment);
+        return;
+    }
+
+    const QString fragment = url.path() + url.fragment();
+
+    setFont(fragment);
+
+    for (const auto& pair : query.queryItems())
+    {
+        char* dot = nullptr;
+        QByteArray tok = pair.first.toUtf8();
+        if (const uint mapping = strtoul(tok, &dot, 0); dot != nullptr)
+        {
+            if (*dot == '\0')
+            {
+                QColor color;
+                tok = pair.second.toUtf8();
+                if (uint x = static_cast<uint>(strtoul(tok.data(), &dot, 0)); dot == tok.data())
+                {
+                    color = QColor::fromString(tok);
+                }
+                else switch (tok.length())
+                {
+                case std::string_view("0xRGB").size():
+                    x = (x & 0xF00) * 0x1100 | (x & 0xF0) * 0x110 | (x & 0xF) * 0x11;
+                    [[fallthrough]];
+                case std::string_view("0xRRGGBB").size():
+                    color = QColor::fromRgb(x);
+                    break;
+                case std::string_view("0xARGB").size():
+                    x = (x & 0xF000) * 0x11000 | (x & 0xF00) * 0x1100 | (x & 0xF0) * 0x110 | (x & 0xF) * 0x11;
+                    [[fallthrough]];
+                case std::string_view("0xAARRGGBB").size():
+                    color = QColor::fromRgba(x);
+                    break;
+                default:
+                    break;
+                }
+                if (color.isValid())
+                {
+                    for (uint mode = QIcon::Normal; mode <= QIcon::Selected; ++mode)
+                    {
+                        if (mapping & (0x10 << mode))
+                        {
+                            setColor(color, QIcon::Mode(mode), QIcon::On);
+                        }
+                        if (mapping & (0x01 << mode))
+                        {
+                            setColor(color, QIcon::Mode(mode), QIcon::Off);
+                        }
+                    }
+                }
+            }
+            else if (strcmp(dot, ".codepoint") == 0)
+            {
+                tok = pair.second.toUtf8();
+                int codepoint = static_cast<int>(strtoul(tok.data(), &dot, 0));
+                bool ok = codepoint >= 0 && codepoint < InvalidIcon;
+                if (dot == tok.data())
+                {
+                    codepoint = QFontIconEnginePrivate::keyToValue(d->getEnum(fragment), tok, &ok);
+                }
+                if (ok)
+                {
+                    for (uint mode = QIcon::Normal; mode <= QIcon::Selected; ++mode)
+                    {
+                        if (mapping & (0x10 << mode))
+                        {
+                            setIcon(codepoint, QIcon::Mode(mode), QIcon::On);
+                        }
+                        if (mapping & (0x01 << mode))
+                        {
+                            setIcon(codepoint, QIcon::Mode(mode), QIcon::Off);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+QFontIconEngine::~QFontIconEngine()
+{
+    if (QMetaEnum::isValid())
+    {
+        QFontIconEnginePrivate::availableFonts[font()].second = *this;
+    }
+}
 
 /**
  * @brief Returns the icon code point set for the given state.
@@ -351,7 +455,7 @@ QString QFontIconEngine::iconName(QIcon::Mode mode, QIcon::State state) const
  */
 QString QFontIconEngine::text(QIcon::Mode mode, QIcon::State state) const
 {
-    return { QChar(icon(mode, state)) };
+    return QChar(icon(mode, state));
 }
 
 /**
@@ -369,15 +473,15 @@ quint32 QFontIconEngine::glyphIndex(QIcon::Mode mode, QIcon::State state) const
  */
 QString QFontIconEngine::font(QIcon::Mode mode, QIcon::State state) const
 {
-    return d->fonts.get(mode, state, QString());
+    return d->fonts.get(mode, state);
 }
 
 /**
  * @brief Returns the scale factor set for the given state.
  */
-qreal QFontIconEngine::scaleFactor(QIcon::Mode mode, QIcon::State state) const
+qreal QFontIconEngine::scale(QIcon::Mode mode, QIcon::State state) const
 {
-    return d->scales.get(mode, state, 0.9);
+    return d->scales.get(mode, state, 1.0);
 }
 
 /**
@@ -389,7 +493,7 @@ QColor QFontIconEngine::color(QIcon::Mode mode, QIcon::State state) const
 
     if(!c.isValid())
     {
-        auto p = QGuiApplication::palette();
+        auto p = QApplication::style()->standardPalette();
 
         switch (mode)
         {
@@ -460,7 +564,7 @@ void QFontIconEngine::setIcon(int icon, QIcon::Mode mode, QIcon::State state)
 void QFontIconEngine::setIcon(const QString& name, QIcon::Mode mode, QIcon::State state)
 {
     bool ok = false;
-    if (int i = d->getEnum(font(mode, state)).keyToValue(name.toUtf8(), &ok); ok)
+    if (int i = QFontIconEnginePrivate::keyToValue(d->getEnum(font(mode, state)), name.toUtf8(), &ok); ok)
         setIcon(i, mode, state);
     else
         qWarning() << "QFontIcon: Invalid icon name";
@@ -475,9 +579,9 @@ void QFontIconEngine::setFont(const QString& font, QIcon::Mode mode, QIcon::Stat
 }
 
 /**
- * @brief Set the scale factor for the given state.
+ * @brief Set the scale for the given state.
  */
-void QFontIconEngine::setScaleFactor(qreal scale, QIcon::Mode mode, QIcon::State state)
+void QFontIconEngine::setScale(qreal scale, QIcon::Mode mode, QIcon::State state)
 {
     d->scales.set(scale, mode, state);
 }
@@ -540,7 +644,7 @@ void QFontIconEngine::paint(QPainter* painter, const QRect& rect, QIcon::Mode mo
     auto g  = glyphIndex(mode, state);
     QString id  = font(mode, state);
     auto f  = QFontIconEnginePrivate::getFont(id);
-    auto sf = scaleFactor(mode, state);
+    auto sf = scale(mode, state);
     auto c  = color(mode, state);
 
     d->resizeFont(s, f, sf, g);
@@ -628,4 +732,27 @@ QIcon QFontIconEngine::icon(int icon, const QString& font)
 QIcon QFontIconEngine::icon(const QString& icon, const QString& font)
 {
     return QIcon(new QFontIconEngine(icon, font));
+}
+
+/**
+ * @brief Factory function that creates a QFontIconEngine.
+ */
+QIconEngine* QFontIconPlugin::create(const QString& icon)
+{
+    // Resolve a conflict between a static and a dynamic plugin in favor of the former.
+    static QIconEnginePlugin* that = nullptr;
+    if (that == nullptr)
+    {
+        const char* const className = metaObject()->className();
+        for (QIconEnginePlugin* child : qApp->findChildren<QIconEnginePlugin*>())
+            if (strcmp(child->metaObject()->superClass()->className(), className) == 0)
+                that = child;
+    }
+    if (that && that != this)
+        return that->create(icon);
+
+    if (icon.endsWith(".ttf"))
+        return new QFontIconEngine(QUrl(icon));
+
+    return nullptr;
 }
