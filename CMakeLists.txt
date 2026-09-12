@@ -13,6 +13,10 @@ add_library(QFontIcon SHARED
   src/qfonticon.cpp
   include/qfonticon.h
 )
+set_target_properties(QFontIcon PROPERTIES
+  AUTOMOC ON
+  AUTORCC ON
+)
 
 target_link_libraries(QFontIcon PUBLIC ${QT}::Core ${QT}::Gui ${QT}::Widgets)
 target_include_directories(QFontIcon PUBLIC include)
