@@ -4,9 +4,12 @@
 #include <QVBoxLayout>
 #include <QWidget>
 #include <QKeyEvent>
+#include <QProgressBar>
+#include <QStatusBar>
 #include <QStyle>
 #include <QTimer>
 
+#include "automator.h"
 #include <awesome.h>
 
 #define QT_STATICPLUGIN
@@ -43,33 +46,34 @@ static int keyToValue(const QMetaEnum& metaEnum, const char* key, bool* ok = nul
     return -1;
 }
 
-#define AUTOMATOR_YIELD(delay) __LINE__; start(delay); break; case __LINE__:
-
-class Automator : public QTimer
+class KeystrokeAutomator : public Automator<KeystrokeAutomator>
 {
 public:
-    Automator()
+    using Automator<KeystrokeAutomator>::Automator;
+    template<bool init>
+    void step()
     {
-        setSingleShot(true);
-    }
-private:
-    int state = NULL;
-protected:
-    void timerEvent(QTimerEvent*) override
-    {
-        do switch (state)
+        switch (state)
         {
         case NULL:
-            state = AUTOMATOR_YIELD(250);
-            qApp->postEvent(QApplication::activeWindow(), new QKeyEvent(QEvent::KeyPress, Qt::Key_Tab, Qt::NoModifier));
-            state = AUTOMATOR_YIELD(250);
-            qApp->postEvent(QApplication::activeWindow(), new QKeyEvent(QEvent::KeyRelease, Qt::Key_Tab, Qt::NoModifier));
-            state = AUTOMATOR_YIELD(250);
-            qApp->postEvent(QApplication::focusWidget(), new QKeyEvent(QEvent::KeyPress, Qt::Key_Space, Qt::NoModifier));
-            state = AUTOMATOR_YIELD(250);
-            qApp->postEvent(QApplication::focusWidget(), new QKeyEvent(QEvent::KeyRelease, Qt::Key_Space, Qt::NoModifier));
+            state = AFTER(250)
+            {
+                qApp->postEvent(QApplication::activeWindow(), new QKeyEvent(QEvent::KeyPress, Qt::Key_Tab, Qt::NoModifier));
+            }
+            state = AFTER(250)
+            {
+                qApp->postEvent(QApplication::activeWindow(), new QKeyEvent(QEvent::KeyRelease, Qt::Key_Tab, Qt::NoModifier));
+            }
+            state = AFTER(250)
+            {
+                qApp->postEvent(QApplication::focusWidget(), new QKeyEvent(QEvent::KeyPress, Qt::Key_Space, Qt::NoModifier));
+            }
+            state = AFTER(250)
+            {
+                qApp->postEvent(QApplication::focusWidget(), new QKeyEvent(QEvent::KeyRelease, Qt::Key_Space, Qt::NoModifier));
+            }
             state = NULL;
-        } while (state == NULL);
+        }
     }
 };
 
@@ -105,8 +109,15 @@ int main(int argc, char *argv[])
 #endif
 
     QMainWindow w;
+    QStatusBar* status = new QStatusBar();
+    QProgressBar* progress = new QProgressBar(status);
+    progress->setFixedWidth(300);
+    progress->setFormat("Step %v of %m");
+    status->addPermanentWidget(progress);
+    w.setStatusBar(status);
 
-    Automator automator;
+    KeystrokeAutomator automator(progress, false);
+    automator.callOnTimeout([&progress] { progress->hide(); });
     automator.start();
 
     QVBoxLayout* layout = new QVBoxLayout();

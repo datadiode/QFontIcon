@@ -29,7 +29,7 @@ else()
 endif()
 
 if(QFONTICON_BUILD_EXAMPLE)
-  add_executable(example example/main.cpp include/awesome.h example/fonts.qrc)
+  add_executable(example example/main.cpp example/automator.h include/awesome.h example/fonts.qrc)
   set_target_properties(example PROPERTIES
     AUTOMOC ON
     AUTORCC ON
